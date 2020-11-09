@@ -30,7 +30,7 @@ numOfColumns = str2num(slcParameters.burstParameterFile.rasterFileDescription.nu
 slc = readBinFile('C:\Users\Björn Bergsson\Desktop\DTUcourses\30350 RemoteSensing\ProjectCornerReflectors\Data\s1a-20150809t083228-vv-iw2-burst5-deramped.slc', numOfColumns, 2);
 %So the slc variable is our single look complex image
 
-%% Computing the azimuth time and slant range from each Corner Reflector to all satellite state vectors:
+%% Computing the Doppler equation and slant range from each Corner Reflector to all satellite state vectors:
 
 %allocating for slant range and azimuth time, one line is for each CR and column denotes state vectors
 Range = zeros(4,length(slcParameters.burstParameterFile.orbitStateVectorList.orbitStateVector));
@@ -52,27 +52,121 @@ for k = 1:length(Range(1,:))
 end
 
 
-%plotting slant range for each station
+%plotting slant range for each station, interpolates vectors 10,11 and 12 and finds the minimum value,
+%returning the slant range closest approach and zero-doppler azimuth time for each Corner Reflector.
+R_0 = zeros(1,length(CRgeo(:,1))); %allocating for slant range closest approach
+Eta_0num = zeros(1,length(CRgeo(:,1))); %allocating for zero-doppler azimuth time, displays seconds from last state vector.
+Eta_0str = num2cell(zeros(1,length(CRgeo(:,1)))); %displays absolute time
+%in these vectors, first element is the value for CR nr. 1 (ID:4), 2nd element is the
+%value for CR nr. 2 (ID:5) and so on.
 for i = 1:length(CRgeo(:,1)) %number of stations
-    figure(i); plot(1:22,Range(i,:)/1000,'b* ') %diving by 1000 to have units in km
+    figure(i); plot(1:length(Range(1,:)),Range(i,:)/1000,'b* ') %diving by 1000 to have units in km
+    hold on;
     xlabel('Azimuth Time')
-    xticks([1:22])
+    xticks([1:length(Range(1,:))])
     xticklabels({SVT{1},SVT{2},SVT{3},SVT{4},SVT{5},SVT{6},SVT{7},SVT{8},SVT{9},SVT{10},SVT{11},SVT{12},SVT{13},SVT{14},SVT{15} ...
     ,SVT{16},SVT{17},SVT{18},SVT{19},SVT{20},SVT{21},SVT{22}})
     xtickangle(90)
     ylabel('Slant range [km]')
-    title(['Corner Reflector ID: ', num2str(CRgeo(i,1)),', 9th of August 2015.'])
+   
+    pfit = polyfit(10:12,Range(i,10:12),2); %fitting vectors 10:12
+    pval = polyval(pfit,10:10^(-7):12); %evaluating with resolution of a microsecond, using 10^(-7) because.
+    plot(10:10^(-7):12,pval/1000,'k-')                                              %10 secs between vectors
+    R_0(i) = min(pval)/1000; %units [km]
+    Test_vec = find(pval==min(pval))/10^6; %if minimum is in more than one location,
+    Eta_0num(i) = 33 + Test_vec(1);         %take the first minimum (could happen because the resolution is so fine).
+    Eta_0str{1,i} = ['8:32:',  num2str(Eta_0num(i))];
+    
+    title({['Corner Reflector ID: ' num2str(CRgeo(i,1)) ', 9th of August 2015.'] [' $R_0 =$ ' num2str(R_0(i)) ' km and $\eta_0 =$ ' char(Eta_0str(1,i)) '.']},'interpreter','latex')
 end
+R_0_meters = R_0*1000; %to also have the slant ranges in [m]
 
 %plotting Doppler equation for each station
 for i = 1:length(CRgeo(:,1)) %number of stations
-    figure(i+4); plot(1:22,DopplerEq(i,:),'b* ')
+    figure(i+4); plot(1:length(Range(1,:)),DopplerEq(i,:),'b* ')
     xlabel('Azimuth Time')
-    xticks([1:22])
+    xticks([1:length(Range(1,:))])
     xticklabels({SVT{1},SVT{2},SVT{3},SVT{4},SVT{5},SVT{6},SVT{7},SVT{8},SVT{9},SVT{10},SVT{11},SVT{12},SVT{13},SVT{14},SVT{15} ...
     ,SVT{16},SVT{17},SVT{18},SVT{19},SVT{20},SVT{21},SVT{22}})
     xtickangle(90)
     ylabel('Doppler equation $V_S \cdot (X_P - X_S)$ [m$^2$/s]','interpreter','latex')
     title(['Corner Reflector ID: ', num2str(CRgeo(i,1)),', 9th of August 2015.'])
 end
+
+
+%% Test section, fitting polynomial to slant ranges, experimenting with number of state vectors to fit.
+%fitting vectors 10:12 gives best fit
+
+figure(9); plot(1:length(Range(1,:)),Range(1,:)/1000,'b* ') %diving by 1000 to have units in km
+hold on;
+xlabel('Azimuth Time')
+xticks([1:length(Range(1,:))])
+xticklabels({SVT{1},SVT{2},SVT{3},SVT{4},SVT{5},SVT{6},SVT{7},SVT{8},SVT{9},SVT{10},SVT{11},SVT{12},SVT{13},SVT{14},SVT{15} ...
+    ,SVT{16},SVT{17},SVT{18},SVT{19},SVT{20},SVT{21},SVT{22}})
+xtickangle(90)
+ylabel('Slant range [km]')
+title(['Corner Reflector ID: ', num2str(CRgeo(1,1)),', 9th of August 2015.'])
+
+[pfit S1] = polyfit(1:length(Range(1,:)),Range(1,:),2); %fitting all state vectors
+[pval delta1] = polyval(pfit,1:10^(-6):length(Range(1,:)),S1); %we evaluate the polynomial at 10^(-6) spacing
+plot(1:10^(-6):length(Range(1,:)),pval/1000,'r-')
+
+[pfit2 S2] = polyfit(3:20,Range(1,3:20),2); %fitting vectors 3:20
+[pval2 delta2] = polyval(pfit2,3:10^(-6):20,S2);
+plot(3:10^(-6):20,pval2/1000,'g-')
+[pfit3 S3] = polyfit(8:15,Range(1,8:15),2); %fitting vectors 8:15
+[pval3 delta3] = polyval(pfit3,8:10^(-6):15,S3);
+plot(8:10^(-6):15,pval3/1000,'b-')
+[pfit4 S4] = polyfit(10:12,Range(1,10:12),2); %fitting vectors 10:12
+[pval4 delta4] = polyval(pfit4,10:10^(-6):12,S4);
+plot(10:10^(-6):12,pval4/1000,'k-')
+
+legend('Range','Fit22','Fit3:20','Fit8:15','Fit10:12')
+
+Norm_Of_Residuals = [S1.normr S2.normr S3.normr S4.normr];
+
+%% Finding the radar coordinates of CR's (i.e. pixel numbers in azimuth and range)
+
+%extracting radar parameters
+f_s = str2num(slcParameters.burstParameterFile.slcParameters.rangeSamplingFrequency.Text); %range sampling frequency
+PRF = str2num(slcParameters.burstParameterFile.slcParameters.pulseRepetitionFrequency.Text); %PulseRepetitionFreq
+midIncAngle = str2num(slcParameters.burstParameterFile.slcParameters.sceneCentreIncidenceAngle.Text);
+near_range = str2num(slcParameters.burstParameterFile.slcParameters.nearRange.Text);
+ncols = str2num(slcParameters.burstParameterFile.rasterFileDescription.numOfColumns.Text);
+nlines = str2num(slcParameters.burstParameterFile.rasterFileDescription.numOfRows.Text);
+TimeLengthOfImage = nlines/PRF; % units: [s]
+
+%calculating pixel spacings
+dr = physconst('lightspeed')/(2*f_s);
+%dx = calcVg()/
+
+%calculating far and mid slangt ranges:
+%to calculate far slant range, (R_far - R_near)/dr = nsample
+far_range = near_range + dr*ncols;
+mid_range = near_range + dr*(ncols/2);
+
+
+
+
+%finding slant range pixel location for each CR:
+range_pix_loc = (R_0_meters - near_range)/dr; %first element corresponds to first CR (ID: 4) and so on...
+
+%finding azimuth pixel location for each CR:
+AziStartTimeSeconds = str2num(string(extractBetween(slcParameters.burstParameterFile.slcParameters.azimuthStartTime.Text,19,28)));
+Delta_AziTime = Eta_0num - AziStartTimeSeconds;
+azi_pix_loc = Delta_AziTime*PRF;
+
+%showing the amplitude image and the location of the CR's in radar coordinates
+figure(10); imagesc(abs(slc),[0 1]);
+colorbar
+colormap(gray)
+hold on;
+plot(range_pix_loc,azi_pix_loc,'*y ')
+xlabel('Range pixels')
+ylabel('Azimuth pixels')
+
+%labeling CR ID numbers to plot
+text(range_pix_loc + 375,azi_pix_loc - 25,num2cell(CRgeo(:,1)'),'Fontsize', 15,'Color','yellow')
+
+
 
