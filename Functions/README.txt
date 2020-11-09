@@ -1,0 +1,1 @@
+\description This folder contains functions that are necessary for our solution
