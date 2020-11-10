@@ -1,6 +1,16 @@
+%Corner reflectot porject on DTU 30350 Remote Sensing
+%Team members: Björn Bergsson, Dániel Levente Bényei, Jesper Asbjørn Juul Kisum
+
+
 %Reading in corner reflector geographic coordinates
 %Format: IDnumber, Lat[deg], Lon[deg], Height[m].
-CRgeo= readmatrix('C:\Users\Björn Bergsson\Desktop\DTUcourses\30350 RemoteSensing\ProjectCornerReflectors\Data\CRs_ITRF2008');
+%Bjorn
+%matrixPath='C:\Users\Björn Bergsson\Desktop\DTUcourses\30350 RemoteSensing\ProjectCornerReflectors\Data\CRs_ITRF2008';
+%Daniel
+matrixPath='Q:\DOKSI\EGYETEM\DTU\3_semester\30350_Remote_sensing\project\data\CRs_ITRF2008';
+%Jesper
+
+CRgeo= readmatrix(matrixPath);
 
 %% Calculating corner reflectors in ECEF coordinates
 
@@ -23,11 +33,23 @@ end
 
 
 %reading radar parameters into structure:
-slcParameters = xml2struct('C:\Users\Björn Bergsson\Desktop\DTUcourses\30350 RemoteSensing\ProjectCornerReflectors\Data\s1a-20150809t083228-vv-iw2-burst5-deramped.xml');
+%Björn
+%xmlPath='C:\Users\Björn Bergsson\Desktop\DTUcourses\30350 RemoteSensing\ProjectCornerReflectors\Data\s1a-20150809t083228-vv-iw2-burst5-deramped.xml'
+%Daniel
+xmlPath='Q:\DOKSI\EGYETEM\DTU\3_semester\30350_Remote_sensing\project\data\s1a-20150809t083228-vv-iw2-burst5-deramped.xml';
+%Jesper
+
+slcParameters = xml2struct(xmlPath);
 
 %Reading binary data matrix into complex matrix:
 numOfColumns = str2num(slcParameters.burstParameterFile.rasterFileDescription.numOfColumns.Text);
-slc = readBinFile('C:\Users\Björn Bergsson\Desktop\DTUcourses\30350 RemoteSensing\ProjectCornerReflectors\Data\s1a-20150809t083228-vv-iw2-burst5-deramped.slc', numOfColumns, 2);
+
+%Björn
+%binFilePath='C:\Users\Björn Bergsson\Desktop\DTUcourses\30350 RemoteSensing\ProjectCornerReflectors\Data\s1a-20150809t083228-vv-iw2-burst5-deramped.slc';
+%Daniel
+binFilePath='Q:\DOKSI\EGYETEM\DTU\3_semester\30350_Remote_sensing\project\data\s1a-20150809t083228-vv-iw2-burst5-deramped.slc';
+%Jesper
+slc = readBinFile(binFilePath, numOfColumns, 2);
 %So the slc variable is our single look complex image
 
 %% Computing the Doppler equation and slant range from each Corner Reflector to all satellite state vectors:
@@ -92,6 +114,10 @@ for i = 1:length(CRgeo(:,1)) %number of stations
     ylabel('Doppler equation $V_S \cdot (X_P - X_S)$ [m$^2$/s]','interpreter','latex')
     title(['Corner Reflector ID: ', num2str(CRgeo(i,1)),', 9th of August 2015.'])
 end
+
+%-----------------------------------------------------------------------------------------------------
+%Testing of fitting polynomial can removed to Test/slantRange.m ? What
+%parameters do we need to pass? @Björn pls look at it later
 
 
 %% Test section, fitting polynomial to slant ranges, experimenting with number of state vectors to fit.
@@ -167,6 +193,4 @@ ylabel('Azimuth pixels')
 
 %labeling CR ID numbers to plot
 text(range_pix_loc + 375,azi_pix_loc - 25,num2cell(CRgeo(:,1)'),'Fontsize', 15,'Color','yellow')
-
-
 
