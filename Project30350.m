@@ -59,6 +59,7 @@ Eta_0num = zeros(1,length(CRgeo(:,1))); %allocating for zero-doppler azimuth tim
 Eta_0str = num2cell(zeros(1,length(CRgeo(:,1)))); %displays absolute time
 %in these vectors, first element is the value for CR nr. 1 (ID:4), 2nd element is the
 %value for CR nr. 2 (ID:5) and so on.
+
 for i = 1:length(CRgeo(:,1)) %number of stations
     figure(i); plot(1:length(Range(1,:)),Range(i,:)/1000,'b* ') %diving by 1000 to have units in km
     hold on;
@@ -92,7 +93,6 @@ for i = 1:length(CRgeo(:,1)) %number of stations
     ylabel('Doppler equation $V_S \cdot (X_P - X_S)$ [m$^2$/s]','interpreter','latex')
     title(['Corner Reflector ID: ', num2str(CRgeo(i,1)),', 9th of August 2015.'])
 end
-
 
 %% Test section, fitting polynomial to slant ranges, experimenting with number of state vectors to fit.
 %fitting vectors 10:12 gives best fit
@@ -146,15 +146,13 @@ far_range = near_range + dr*ncols;
 mid_range = near_range + dr*(ncols/2);
 
 
-
-
 %finding slant range pixel location for each CR:
-range_pix_loc = (R_0_meters - near_range)/dr; %first element corresponds to first CR (ID: 4) and so on...
+range_pix_loc = 1 + (R_0_meters - near_range)/dr; %first element corresponds to first CR (ID: 4) and so on...
 
 %finding azimuth pixel location for each CR:
 AziStartTimeSeconds = str2num(string(extractBetween(slcParameters.burstParameterFile.slcParameters.azimuthStartTime.Text,19,28)));
 Delta_AziTime = Eta_0num - AziStartTimeSeconds;
-azi_pix_loc = Delta_AziTime*PRF;
+azi_pix_loc = 1 + Delta_AziTime*PRF;
 
 %showing the amplitude image and the location of the CR's in radar coordinates
 figure(10); imagesc(abs(slc),[0 1]);
@@ -169,4 +167,123 @@ ylabel('Azimuth pixels')
 text(range_pix_loc + 375,azi_pix_loc - 25,num2cell(CRgeo(:,1)'),'Fontsize', 15,'Color','yellow')
 
 
+%% Working on method 1, interpolating satellite position coordinates
+
+X_sat = zeros(1,length(Range(1,:))); %allocating, X positions for all satellite state vectors.
+Y_sat = zeros(1,length(Range(1,:)));
+Z_sat = zeros(1,length(Range(1,:)));
+
+for i = 1:length(Range(1,:)) %getting position coordinates for all satellite state vectors
+    X_sat(i) = str2num(slcParameters.burstParameterFile.orbitStateVectorList.orbitStateVector{i}.x.Text);
+    Y_sat(i) = str2num(slcParameters.burstParameterFile.orbitStateVectorList.orbitStateVector{i}.y.Text);
+    Z_sat(i) = str2num(slcParameters.burstParameterFile.orbitStateVectorList.orbitStateVector{i}.z.Text);
+end
+
+%Using FitTest30350 function, finding what degree polynomial best fits the data
+[n_x NormRes_x] = FitTest30350(1:length(X_sat),X_sat,21,10^(-3));
+[n_y NormRes_y] = FitTest30350(1:length(Y_sat),Y_sat,21,10^(-3));
+[n_z NormRes_z] = FitTest30350(1:length(Z_sat),Z_sat,21,10^(-3));
+
+
+%fitting position coordinates for all state vectors, divide by 1000 so units in km.
+%we evaluate the polynomial at millisecon interval, 10^(-4) spacing.
+[pfit_x S_x] = polyfit(1:length(X_sat),X_sat/1000,n_x); 
+[pval_x] = polyval(pfit_x,1:10^(-4):length(X_sat),S_x); 
+
+[pfit_y S_y] = polyfit(1:length(Y_sat),Y_sat/1000,n_y);
+[pval_y] = polyval(pfit_y,1:10^(-4):length(Y_sat),S_y); 
+
+[pfit_z S_z] = polyfit(1:length(Z_sat),Z_sat/1000,n_z);
+[pval_z] = polyval(pfit_z,1:10^(-4):length(Z_sat),S_z); 
+
+
+%plotting the position coordinates and the fit
+figure(11); plot(1:length(X_sat),X_sat/1000,'b*')
+hold on;
+plot(1:10^(-4):length(X_sat),pval_x,'r-')
+xlabel('Azimuth Time')
+xticks([1:length(Range(1,:))])
+xticklabels({SVT{1},SVT{2},SVT{3},SVT{4},SVT{5},SVT{6},SVT{7},SVT{8},SVT{9},SVT{10},SVT{11},SVT{12},SVT{13},SVT{14},SVT{15} ...
+    ,SVT{16},SVT{17},SVT{18},SVT{19},SVT{20},SVT{21},SVT{22}})
+xtickangle(90)
+ylabel('Satellite X position [km]')
+
+figure(12); plot(1:length(Y_sat),Y_sat/1000,'b*')
+hold on;
+plot(1:10^(-4):length(Y_sat),pval_y,'r-')
+xlabel('Azimuth Time')
+xticks([1:length(Range(1,:))])
+xticklabels({SVT{1},SVT{2},SVT{3},SVT{4},SVT{5},SVT{6},SVT{7},SVT{8},SVT{9},SVT{10},SVT{11},SVT{12},SVT{13},SVT{14},SVT{15} ...
+    ,SVT{16},SVT{17},SVT{18},SVT{19},SVT{20},SVT{21},SVT{22}})
+xtickangle(90)
+ylabel('Satellite Y position [km]')
+
+figure(13); plot(1:length(Z_sat),Z_sat/1000,'b*')
+hold on;
+plot(1:10^(-4):length(Y_sat),pval_z,'r-')
+xlabel('Azimuth Time')
+xticks([1:length(Range(1,:))])
+xticklabels({SVT{1},SVT{2},SVT{3},SVT{4},SVT{5},SVT{6},SVT{7},SVT{8},SVT{9},SVT{10},SVT{11},SVT{12},SVT{13},SVT{14},SVT{15} ...
+    ,SVT{16},SVT{17},SVT{18},SVT{19},SVT{20},SVT{21},SVT{22}})
+xtickangle(90)
+ylabel('Satellite Z position [km]')
+
+
+
+%then when we have the zero doppler time, we find the value of the
+%polynomials at that time (use pval_x y and z).
+
+
+Time_BB = Eta_0num-33; %zero-doppler times obtained from method 2
+
+AziTimesMethod1 = load('matlab.mat');
+Time_Jesp = AziTimesMethod1.time_z_doppler.Second -33; %times obtained from method 1
+
+%finding the value at x-axis corresponding to the azimuth zero-doppler time
+time_axis_nr = round((90 + Time_Jesp))*1000; %number of seconds since first vector times 1000 to get milliseconds
+%first element corresponds to CR ID:4 and so on...
+
+%Satellite ECEF coordinates at zero-doppler time, first element corresponds to CR ID:4 and so on...
+X_eta0 = pval_x(time_axis_nr);
+Y_eta0 = pval_y(time_axis_nr);
+Z_eta0 = pval_z(time_axis_nr);
+
+%ECEF coordinates X Y Z of the satellite at zero-doopler time for each CR
+Sat_CR4 = [X_eta0(1) Y_eta0(1) Z_eta0(1)]*1000; %multiply by 1000 to get values in [m]
+Sat_CR5 = [X_eta0(2) Y_eta0(2) Z_eta0(2)]*1000;
+Sat_CR6 = [X_eta0(3) Y_eta0(3) Z_eta0(3)]*1000;
+Sat_CR14 = [X_eta0(4) Y_eta0(4) Z_eta0(4)]*1000; 
+
+%calculating the range of closest approach:
+R0_CR4 = norm(CR_ECEF(1,2:4)-Sat_CR4);
+R0_CR5 = norm(CR_ECEF(2,2:4)-Sat_CR5);
+R0_CR6 = norm(CR_ECEF(3,2:4)-Sat_CR6);
+R0_CR14 = norm(CR_ECEF(4,2:4)-Sat_CR14);
+
+%string of R0 distances, first element corresponds to R0 for CR ID4 and so on...
+R0_method1 = [R0_CR4 R0_CR5 R0_CR6 R0_CR14];
+
+%comparison between method1 and method2
+DeltaR0 = R0_method1 - R_0_meters; %~few m difference
+DeltaEta0 = AziTimesMethod1.time_z_doppler.Second - Eta_0num; %~2 ms difference
+
+%calculating pixel locations for method 1
+range_pix_loc_1 = 1 + (R0_method1 - near_range)/dr; %first element corresponds to first CR (ID: 4) and so on...
+Delta_AziTime_1 =  (Time_Jesp + 33) - AziStartTimeSeconds;
+azi_pix_loc_1 = 1 + Delta_AziTime_1*PRF;
+
+
+%showing the amplitude image and the location of the CR's in radar coordinates
+figure(14); imagesc(abs(slc),[0 1]);
+colorbar
+colormap(gray)
+hold on;
+plot(range_pix_loc,azi_pix_loc,'*y ') %method number 2
+plot(range_pix_loc_1,azi_pix_loc_1,'*r ') %method number 1, number 1 seems to be more accurate.
+xlabel('Range pixels')
+ylabel('Azimuth pixels')
+
+%labeling CR ID numbers to plot
+text(range_pix_loc + 375,azi_pix_loc - 25,num2cell(CRgeo(:,1)'),'Fontsize', 15,'Color','yellow')
+text(range_pix_loc_1 + 375,azi_pix_loc_1 - 25,num2cell(CRgeo(:,1)'),'Fontsize', 15,'Color','red')
 
