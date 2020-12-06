@@ -132,13 +132,192 @@ end
 figure(10)
 clf
 hold on 
-plot([i(1) i(idx_dopp) i(end)],[DopplerEq(4,10) val_dopp DopplerEq(4,12)])
-plot(i(idx_dopp),val_dopp,'+')
+plot([i(1) i(idx_dopp(1)) i(end)],[DopplerEq(4,10) val_dopp(1) DopplerEq(4,12)])
+plot(i(idx_dopp(1)),val_dopp(1),'+')
 %plot([i(1) i(idx_dopp) i(end)],[0 0 0])
-xticks([i(1) i(idx_dopp) i(end)])
+xticks([i(1) i(idx_dopp(1)) i(end)])
 xticklabels([SVT{10},time_z_doppler_string,SVT{12}])
 xtickangle(90)
+grid on
 hold off
+
+%%
+%Read in Bjørns coordinates
+corners=load('SampleLineDoppEq.mat');
+%%
+%impulse response analysis
+data = slc;
+P = abs(data).^2;
+[powMax,idx]= max(P(:));
+P_norm=P/powMax;
+
+%[rowMax , colMax] = ind2sub(size(P), idx);
+%fprintf('rowMax , colMax = %d, %d\n', rowMax , colMax);
+%data patch extraction for interpolation
+halfPatchWindowSize = 8;
+overSampFactor = 128;
+rowStart =round( corners.azi_pix_loc_1_corr - halfPatchWindowSize);
+rowEnd = round(corners.azi_pix_loc_1_corr + halfPatchWindowSize);
+colStart = round(corners.range_pix_loc_1_corr - halfPatchWindowSize);
+colEnd = round(corners.range_pix_loc_1_corr + halfPatchWindowSize);
+dataPatch = zeros(halfPatchWindowSize*2+1,halfPatchWindowSize*2+1,length(rowStart));
+for i=1:length(rowStart)
+dataPatch(:,:,i) = P_norm(rowStart(i) : rowEnd(i) , colStart(i) : colEnd(i));    
+end
+
+%% power conversions
+ZI = interpft(interpft(dataPatch , size(dataPatch ,1)*overSampFactor ,1),size(dataPatch ,1)*overSampFactor ,2);
+P = ZI.*conj(ZI);
+
+
+[powMax , idx] = max(P,[],[1,2],'linear');
+
+
+for i=1:size(P,3)
+    P(:,:,i) = P(:,:,i)/ powMax(i);
+end
+[R_i_Max , Az_i_Max] = ind2sub(size(P), idx);
+
+
+
+
+
+%% plot of interpolated patch before and after
+figure()
+imagesc([],[],abs(dataPatch(:,:,1).^0.3).^2)
+xlabel("Azimuth (samples)");
+ylabel("Range (samples)");
+colormap('Gray');
+colorbar;
+
+figure()
+imagesc([],[],abs(ZI(:,:,1).^0.3).^2)
+xlabel("Azimuth (samples)");
+ylabel("Range (samples)");
+colormap('Gray');
+colorbar;
+
+
+
+
+%% 
+cr_loc_azi=round(corners.azi_pix_loc_1_corr);
+cr_loc_range=round(corners.range_pix_loc_1_corr);
+
+
+%% plotting intesity profiles and calculating pslr and pulse width
+
+cridx=[4 5 6 14];
+rangeidx=[0 1 2 3];
+aziidx=[1 2 3 4];
+figure(100)
+clf
+for i=1:size(P,3)
+
+P_h = ZI(:,Az_i_Max(:,:,i)-(i-1)*size(ZI,1),i);
+P_v = ZI(R_i_Max(:,:,i),:,i);
+% Intesity profiles for both range and azimuth
+
+inter_ticks_azi=[-halfPatchWindowSize:halfPatchWindowSize]+cr_loc_azi(i);
+inter_ticks_range=[-halfPatchWindowSize:halfPatchWindowSize]+cr_loc_range(i);
+
+subplot(4,2,rangeidx(i)+i)
+plot(pow2db(abs(P_h(:,1)/max(P_h(:,1))).^2),'color','blue','LineWidth',1);
+title(['Range intensity profile for corner reflector #',num2str(cridx(i))]);
+grid
+%xlim([-30 994]);
+ylim([-50 5]);
+ylabel('Power[dB]');
+xl=xlabel('Range pixels');
+xl.Position(2)=xl.Position(2)-0.1;
+xticks([0:halfPatchWindowSize*2]*overSampFactor);
+xticklabels(inter_ticks_range);
+xtickangle(-20);
+
+subplot(4,2,aziidx(i)+i)
+plot(pow2db(abs(P_v(1,:)/max(P_v(1,:))).^2),'color','red','LineWidth',1);
+title(['Azimuth intensity profile for corner reflector #',num2str(cridx(i))]);
+grid
+%xlim([-18 1006]);
+ylim([-50 5]);
+ylabel('Power[dB]');
+xl=xlabel('Azimuth pixels');
+xl.Position(2)=xl.Position(2)-0.1;
+xticks([0:halfPatchWindowSize*2]*overSampFactor);
+xticklabels(inter_ticks_azi);
+xtickangle(-20);
+
+%calc -3db bw
+pow_azi=(pow2db(abs(P_v/max(P_v)).^2));
+pow_range=(pow2db(abs(P_h/max(P_h)).^2));
+dbbw=-3;
+
+[val_dbbw_azi_low(i),idx_dbbw_azi_low(i)]=min(abs(pow_azi(1:Az_i_Max(i)-(i-1)*size(ZI,1))-dbbw));
+[val_dbbw_range_low(i),idx_dbbw_range_low(i)]=min(abs(pow_range(1:R_i_Max(i))-dbbw));
+[val_dbbw_azi_high(i),idx_dbbw_azi_high(i)]=min(abs(pow_azi(Az_i_Max(i)-(i-1)*size(ZI,1):end)-dbbw));
+[val_dbbw_range_high(i),idx_dbbw_range_high(i)]=min(abs(pow_range(R_i_Max(i):end)-dbbw));
+
+dbbw_azi_low(i)=pow_azi(idx_dbbw_azi_low(i));
+dbbw_range_low(i)=pow_range(idx_dbbw_range_low(i));
+
+dbbw_azi_high(i)=pow_azi(idx_dbbw_azi_high(i)+Az_i_Max(i)-(i-1)*size(ZI,1)-1);
+dbbw_range_high(i)=pow_range(idx_dbbw_range_high(i)+R_i_Max(i)-1);
+
+bw_3db_azi_inter_px(i)=(idx_dbbw_azi_high(i)+Az_i_Max(i)-(i-1)*size(ZI,1))-idx_dbbw_azi_low(i);
+bw_3db_range_inter_px(i)=(idx_dbbw_range_high(i)+R_i_Max(i))-idx_dbbw_range_low(i);
+
+% pslr calculations
+[peaks_azi,peaks_idx_azi]=findpeaks(pow_azi);
+[peaks_azi_sorted,peaks_azi_sorted_idx]=sort(peaks_azi);
+plsr_azi(i)=peaks_azi(peaks_azi_sorted_idx(end-1));
+
+[peaks_range,peaks_idx_range]=findpeaks(pow_range);
+[peaks_range_sorted,peaks_range_sorted_idx]=sort(peaks_range);
+plsr_range(i)=peaks_range(peaks_range_sorted_idx(end-1));
+
+
+%plotting pslr and -3dbbw
+p1=[peaks_idx_range(peaks_range_sorted_idx(end-1)) peaks_range(peaks_range_sorted_idx(end-1))];
+p2= [ peaks_idx_range(peaks_range_sorted_idx(end-1)) 0];
+subplot(4,2,rangeidx(i)+i)
+line([peaks_idx_range(peaks_range_sorted_idx(end-1)) peaks_idx_range(peaks_range_sorted_idx(end-1))], [peaks_range(peaks_range_sorted_idx(end-1)) 0],'color','green','LineWidth',2,'linestyle','-.')
+%text(peaks_idx_range(peaks_range_sorted_idx(end-1)),peaks_range(peaks_range_sorted_idx(end-1))/2,'\leftarrow PSLR')
+%text(p1(1),p1(2), sprintf('(%.0f,%.0f)',p1))
+%text(p2(1),p2(2), sprintf('(%.0f,%.0f)',p2))
+p1=[idx_dbbw_range_low(i) -3];
+p2=[idx_dbbw_range_high(i)+R_i_Max(i) -3];
+line([p1(1) p2(1)], [-3 -3],'color',[.5 .5 0],'LineWidth',2)
+%text(p2(1),p2(2),'  \leftarrow 3 dB bandwidth')
+legend('intensity[dB]',['PSLR = ',num2str(round(abs(peaks_range(peaks_range_sorted_idx(end-1))),2))],'-3 dB bandwidth','location','NE')
+
+
+p1=[peaks_idx_azi(peaks_azi_sorted_idx(end-1)) peaks_azi(peaks_azi_sorted_idx(end-1))];
+p2= [ peaks_idx_azi(peaks_azi_sorted_idx(end-1)) 0];
+subplot(4,2,aziidx(i)+i)
+%text(peaks_idx_azi(peaks_azi_sorted_idx(end-1)),peaks_azi(peaks_azi_sorted_idx(end-1))/2,'\leftarrow PSLR')
+line([peaks_idx_azi(peaks_azi_sorted_idx(end-1)) peaks_idx_azi(peaks_azi_sorted_idx(end-1))], [peaks_azi(peaks_azi_sorted_idx(end-1)) 0],'color','green','LineWidth',2,'linestyle','-.')
+%text(p1(1),p1(2), sprintf('(%.0f,%.0f)',p1))
+%text(p2(1),p2(2), sprintf('(%.0f,%.0f)',p2))
+p1=[idx_dbbw_azi_low(i) -3];
+p2=[idx_dbbw_azi_high(i)+Az_i_Max(i)-(i-1)*size(ZI,1) -3];
+line([p1(1) p2(1)], [-3 -3],'color',[.5 .5 0],'LineWidth',2)
+%text(p2(1),p2(2),'  \leftarrow 3 dB bandwidth')
+legend('intensity[dB]',['PSLR = ',num2str(round(abs(peaks_azi(peaks_azi_sorted_idx(end-1))),2))],'-3 dB bandwidth','location','NE')
+
+end
+
+%%
+% conversion from interpolated pixels to meters
+bw_3db_azi_px=bw_3db_azi_inter_px/overSampFactor;
+bw_3db_range_px=bw_3db_range_inter_px/overSampFactor;
+prf=14.0660469;%from bjorn, just for the presentation
+%prf=vg/str2num(slcParameters.burstParameterFile.slcParameters.pulseRepetitionFrequency.Text);
+bw_3db_azi_m=bw_3db_azi_px*prf
+
+rsf=physconst('lightspeed')/(2*str2num(slcParameters.burstParameterFile.slcParameters.rangeSamplingFrequency.Text));
+bw_3db_range_m=bw_3db_range_px*rsf
+
+%sub pixel accuracy
 
 
 
